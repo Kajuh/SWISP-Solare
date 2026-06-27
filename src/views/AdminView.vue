@@ -231,7 +231,7 @@ onMounted(loadAll)
         <input v-model="pickSearch" placeholder="Buscar jogador para escalar…" style="margin-bottom: 10px" />
         <div class="picker">
           <div v-for="p in availablePlayers" :key="p.id" class="picker-row">
-            <span>{{ p.nick }} <span class="muted">· {{ p.game_class }} · {{ p.rating }}</span></span>
+            <span>{{ p.nick }} <span class="muted">· {{ p.game_class }} · {{ specShort(p.specialization) }} · {{ p.rating }}</span></span>
             <span class="flex" style="gap: 6px">
               <button class="btn btn-sm" :class="{ 'btn-primary': assigned(p.id) === 'A' }" @click="toggle(p.id, 'A')">A</button>
               <button class="btn btn-sm" :class="{ 'btn-primary': assigned(p.id) === 'B' }" @click="toggle(p.id, 'B')">B</button>

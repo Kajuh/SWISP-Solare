@@ -51,7 +51,7 @@ onMounted(loadClasses)
       <template v-if="!done">
         <p class="muted" style="margin: 0">
           Cadastre-se para entrar nos campeonatos. Todo mundo começa com <strong>1000</strong> de pontuação.
-          Você pode usar o mesmo nick em <strong>classes diferentes</strong> (um personagem por classe).
+          Você pode usar o mesmo nick em <strong>classes ou especializações diferentes</strong> — cada combinação é um personagem.
         </p>
         <form class="grid" style="gap: 14px" @submit.prevent="submit">
           <div>

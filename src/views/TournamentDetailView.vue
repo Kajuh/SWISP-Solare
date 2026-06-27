@@ -4,6 +4,7 @@ import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import Bo5Entry from '@/components/Bo5Entry.vue'
+import { specShort } from '@/lib/labels'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
@@ -27,7 +28,7 @@ async function load() {
   loading.value = true
   const [{ data: t }, { data: pl }, { data: pa }, { data: mt }] = await Promise.all([
     supabase.from('tournaments').select('*').eq('id', props.id).maybeSingle(),
-    supabase.from('players').select('id, nick, game_class, rating').order('nick'),
+    supabase.from('players').select('id, nick, game_class, rating, specialization').order('nick'),
     supabase.from('tournament_participants').select('player_id').eq('tournament_id', props.id),
     supabase
       .from('matches')
@@ -156,7 +157,7 @@ watch(() => props.id, load)
         <span
           v-for="p in filteredPlayers" :key="p.id"
           class="pk" :class="{ on: isParticipant(p.id) }" @click="toggleParticipant(p.id)"
-        >{{ p.nick }} <span class="muted">{{ p.game_class }}</span></span>
+        >{{ p.nick }} <span class="muted">{{ p.game_class }} · {{ specShort(p.specialization) }}</span></span>
         <span v-if="!filteredPlayers.length" class="muted">Nenhum jogador. Peça para se cadastrarem em /cadastro.</span>
       </div>
     </div>
