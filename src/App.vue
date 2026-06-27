@@ -16,7 +16,7 @@ async function logout() {
   <header class="topbar">
     <div class="topbar-inner container">
       <RouterLink to="/" class="brand">
-        <span class="brand-mark">⚔</span>
+        <img src="/logo.jpg" alt="Solare Arena" class="brand-logo" />
         <span>Solare<strong>Arena</strong></span>
       </RouterLink>
       <nav class="nav">
@@ -64,9 +64,12 @@ async function logout() {
 }
 .brand:hover { text-decoration: none; }
 .brand strong { color: var(--accent); }
-.brand-mark {
-  color: var(--accent);
-  font-size: 22px;
+.brand-logo {
+  height: 32px;
+  width: 32px;
+  border-radius: 8px;
+  object-fit: cover;
+  display: block;
 }
 .nav { display: flex; gap: 20px; align-items: center; }
 .nav a { color: var(--text-dim); font-weight: 600; font-size: 14px; }
