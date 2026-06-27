@@ -1,0 +1,218 @@
+<script setup>
+import { ref, computed, onMounted, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import { supabase } from '@/lib/supabase'
+import { useAuthStore } from '@/stores/auth'
+import Bo5Entry from '@/components/Bo5Entry.vue'
+
+const props = defineProps({ id: { type: String, required: true } })
+const auth = useAuthStore()
+
+const event = ref(null)
+const players = ref([])
+const participantIds = ref([])
+const matches = ref([])
+const loading = ref(true)
+const drawing = ref(false)
+const msg = ref('')
+const err = ref('')
+
+function flash(text, isError = false) {
+  if (isError) { err.value = text; msg.value = '' } else { msg.value = text; err.value = '' }
+  setTimeout(() => { msg.value = ''; err.value = '' }, 4500)
+}
+
+async function load() {
+  loading.value = true
+  const [{ data: t }, { data: pl }, { data: pa }, { data: mt }] = await Promise.all([
+    supabase.from('tournaments').select('*').eq('id', props.id).maybeSingle(),
+    supabase.from('players').select('id, nick, game_class, rating').order('nick'),
+    supabase.from('tournament_participants').select('player_id').eq('tournament_id', props.id),
+    supabase
+      .from('matches')
+      .select('*, mp:match_players(team, delta, player:players(id, nick, game_class))')
+      .eq('tournament_id', props.id)
+      .order('created_at', { ascending: false }),
+  ])
+  event.value = t
+  players.value = pl ?? []
+  participantIds.value = (pa ?? []).map((x) => x.player_id)
+  matches.value = mt ?? []
+  loading.value = false
+}
+
+const current = computed(() => matches.value.find((m) => m.status === 'pending') || null)
+const history = computed(() => matches.value.filter((m) => m.status === 'completed'))
+const participantCount = computed(() => participantIds.value.length)
+
+function roster(match, team) {
+  return (match.mp ?? []).filter((x) => x.team === team).map((x) => x.player)
+}
+
+/* --------------------------- participantes ----------------------------- */
+const search = ref('')
+const filteredPlayers = computed(() =>
+  players.value.filter((p) => p.nick.toLowerCase().includes(search.value.toLowerCase()))
+)
+function isParticipant(id) { return participantIds.value.includes(id) }
+async function toggleParticipant(id) {
+  if (isParticipant(id)) {
+    const { error } = await supabase.from('tournament_participants')
+      .delete().eq('tournament_id', props.id).eq('player_id', id)
+    if (error) return flash(error.message, true)
+    participantIds.value = participantIds.value.filter((x) => x !== id)
+  } else {
+    const { error } = await supabase.from('tournament_participants')
+      .insert({ tournament_id: props.id, player_id: id })
+    if (error) return flash(error.message, true)
+    participantIds.value = [...participantIds.value, id]
+  }
+}
+
+/* ----------------------------- partidas -------------------------------- */
+async function drawMatch() {
+  drawing.value = true
+  const { error } = await supabase.rpc('draw_random_match', { p_tournament_id: props.id, p_team_size: 3 })
+  drawing.value = false
+  if (error) return flash(error.message, true)
+  await load()
+  flash('Partida sorteada!')
+}
+async function submitResult(match, winners) {
+  const { error } = await supabase.rpc('set_match_result', { p_match_id: match.id, p_round_winners: winners })
+  if (error) return flash(error.message, true)
+  await load()
+  flash('Resultado aplicado e pontuação atualizada.')
+}
+async function cancelMatch(match) {
+  if (!confirm('Descartar esta partida sorteada (sem pontuar)?')) return
+  const { error } = await supabase.from('matches').delete().eq('id', match.id)
+  if (error) return flash(error.message, true)
+  await load()
+}
+async function finishEvent() {
+  await supabase.from('tournaments').update({ status: 'finished' }).eq('id', props.id)
+  await load()
+}
+
+onMounted(load)
+watch(() => props.id, load)
+</script>
+
+<template>
+  <p v-if="loading" class="empty">Carregando…</p>
+  <p v-else-if="!event" class="empty">Evento não encontrado.</p>
+
+  <section v-else class="grid" style="gap: 20px">
+    <RouterLink to="/eventos" class="muted">← todos os eventos</RouterLink>
+    <div class="flex between wrap">
+      <div>
+        <h1 style="margin: 0">{{ event.name }}</h1>
+        <p class="muted" style="margin: 4px 0 0">
+          Vitória +{{ event.win_points }} · Derrota −{{ event.loss_points }} (+{{ event.round_point }} por round vencido)
+        </p>
+      </div>
+      <span class="badge">{{ event.status }}</span>
+    </div>
+
+    <p v-if="msg" class="banner">{{ msg }}</p>
+    <p v-if="err" class="banner" style="border-color: var(--red); color: var(--red); background: rgba(240,85,106,0.08)">{{ err }}</p>
+
+    <!-- ===== Participantes (admin) ===== -->
+    <div v-if="auth.isAdmin && event.status !== 'finished'" class="card">
+      <h3 style="margin-top: 0">Participantes <span class="muted">({{ participantCount }})</span></h3>
+      <p class="muted">Marque quem está jogando. As partidas sorteiam 6 deles em 2 times de 3 (sem repetir classe no time).</p>
+      <input v-model="search" placeholder="Buscar jogador…" style="margin-bottom: 10px" />
+      <div class="pickers">
+        <span
+          v-for="p in filteredPlayers" :key="p.id"
+          class="pk" :class="{ on: isParticipant(p.id) }" @click="toggleParticipant(p.id)"
+        >{{ p.nick }} <span class="muted">{{ p.game_class }}</span></span>
+        <span v-if="!filteredPlayers.length" class="muted">Nenhum jogador. Peça para se cadastrarem em /cadastro.</span>
+      </div>
+    </div>
+
+    <!-- ===== Partida atual ===== -->
+    <div class="card">
+      <h3 style="margin-top: 0">Partida atual</h3>
+
+      <template v-if="current">
+        <div class="grid" style="grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin-bottom: 14px">
+          <div class="team-card a">
+            <div class="team-h">Time A</div>
+            <div v-for="p in roster(current, 'A')" :key="p.id">
+              <RouterLink :to="`/jogador/${p.id}`">{{ p.nick }}</RouterLink>
+              <span class="muted"> · {{ p.game_class }}</span>
+            </div>
+          </div>
+          <div class="vs">VS</div>
+          <div class="team-card b">
+            <div class="team-h">Time B</div>
+            <div v-for="p in roster(current, 'B')" :key="p.id">
+              <RouterLink :to="`/jogador/${p.id}`">{{ p.nick }}</RouterLink>
+              <span class="muted"> · {{ p.game_class }}</span>
+            </div>
+          </div>
+        </div>
+
+        <Bo5Entry
+          v-if="auth.isAdmin"
+          :label-a="'Time A'" :label-b="'Time B'" :best-of="current.best_of"
+          @submit="(w) => submitResult(current, w)" @cancel="cancelMatch(current)"
+        />
+        <p v-else class="muted">Aguardando o resultado…</p>
+      </template>
+
+      <template v-else>
+        <p class="empty" v-if="!auth.isAdmin">Nenhuma partida em andamento.</p>
+        <div v-else class="flex" style="gap: 12px; align-items: center">
+          <button class="btn btn-primary" :disabled="participantCount < 6 || drawing || event.status === 'finished'" @click="drawMatch">
+            🎲 {{ drawing ? 'Sorteando…' : 'Gerar partida' }}
+          </button>
+          <span v-if="participantCount < 6" class="muted">Precisa de pelo menos 6 participantes.</span>
+        </div>
+      </template>
+    </div>
+
+    <!-- ===== Histórico ===== -->
+    <div class="card" style="padding: 0; overflow: hidden">
+      <h3 style="margin: 20px 20px 0">Histórico do evento <span class="muted">({{ history.length }})</span></h3>
+      <p v-if="!history.length" class="empty">Nenhuma partida finalizada ainda.</p>
+      <table v-else style="margin-top: 12px">
+        <thead>
+          <tr><th>Time A</th><th style="text-align: center">Placar</th><th>Time B</th></tr>
+        </thead>
+        <tbody>
+          <tr v-for="m in history" :key="m.id">
+            <td :class="{ winner: m.winner === 'A' }">
+              {{ roster(m, 'A').map((p) => p.nick).join(', ') }}
+            </td>
+            <td style="text-align: center; font-weight: 700; white-space: nowrap">
+              {{ m.rounds_a }} × {{ m.rounds_b }}
+            </td>
+            <td :class="{ winner: m.winner === 'B' }">
+              {{ roster(m, 'B').map((p) => p.nick).join(', ') }}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div v-if="auth.isAdmin && event.status !== 'finished'">
+      <button class="btn btn-sm" @click="finishEvent">Encerrar evento</button>
+    </div>
+  </section>
+</template>
+
+<style scoped>
+.pickers { display: flex; flex-wrap: wrap; gap: 6px; }
+.pk { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 999px; padding: 4px 11px; font-size: 13px; cursor: pointer; }
+.pk.on { background: var(--accent); color: #1a1405; border-color: var(--accent); }
+
+.team-card { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; }
+.team-card.a { border-left: 3px solid var(--accent); }
+.team-card.b { border-left: 3px solid var(--blue); }
+.team-h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 8px; }
+.vs { font-weight: 700; color: var(--text-dim); }
+.winner { color: var(--accent); font-weight: 700; }
+</style>
