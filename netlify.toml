@@ -1,0 +1,20 @@
+# Configuração de deploy no Netlify.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# As variáveis do Supabase precisam existir DURANTE O BUILD — o Vite as "assa"
+# dentro do bundle. A chave abaixo é a "publishable" (PÚBLICA) do Supabase: ela
+# é exposta no app de qualquer forma e pode ficar no repositório. A segurança real
+# é feita pelo RLS no banco. Se quiser, dá pra sobrescrever/remover daqui e
+# configurar em: Netlify > Site configuration > Environment variables.
+[build.environment]
+  VITE_SUPABASE_URL = "https://xlermaddjenzvkwspjjc.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "sb_publishable_dK3crEwbYvH9AH93XhgoIQ_zpFkLZvs"
+
+# SPA: qualquer rota cai no index.html (senão links diretos como /eventos dão 404).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
