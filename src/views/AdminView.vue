@@ -9,6 +9,7 @@ const tab = ref('eventos')
 
 const players = ref([])
 const events = ref([])
+const recentMatches = ref([])
 const msg = ref('')
 const err = ref('')
 
@@ -18,12 +19,51 @@ function flash(text, isError = false) {
 }
 
 async function loadAll() {
-  const [{ data: pl }, { data: tr }] = await Promise.all([
+  const [{ data: pl }, { data: tr }, { data: mt }] = await Promise.all([
     supabase.from('players').select('*').order('rating', { ascending: false }),
     supabase.from('tournaments').select('*').order('created_at', { ascending: false }),
+    supabase
+      .from('matches')
+      .select('*, mp:match_players(team, player:players(nick)), event:tournaments(name)')
+      .order('created_at', { ascending: false })
+      .limit(60),
   ])
   players.value = pl ?? []
   events.value = tr ?? []
+  recentMatches.value = mt ?? []
+}
+
+function roster(m, team) {
+  return (m.mp ?? []).filter((x) => x.team === team).map((x) => x.player?.nick).join(', ') || '—'
+}
+function fmtDate(d) {
+  if (!d) return '—'
+  return new Date(d).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
+async function deleteMatch(m) {
+  if (!confirm('Remover esta partida? Os pontos e vitórias/derrotas dela serão revertidos.')) return
+  const { error } = await supabase.rpc('delete_match', { p_match_id: m.id })
+  if (error) return flash(error.message, true)
+  await loadAll()
+  flash('Partida removida e pontos revertidos.')
+}
+
+async function resetScores() {
+  if (!confirm('ZERAR PONTUAÇÃO?\n\nTodos voltam para 1000 e as partidas/eventos são apagados. Os JOGADORES continuam cadastrados.\n\nIsso não tem volta.')) return
+  const { error } = await supabase.rpc('reset_scores')
+  if (error) return flash(error.message, true)
+  await loadAll()
+  flash('Pontuação zerada. Jogadores mantidos.')
+}
+
+async function resetAll() {
+  if (!confirm('APAGAR TUDO?\n\nIsso remove TODOS os jogadores, partidas e eventos. Só sobram as classes e o seu login de admin.\n\nIsso não tem volta.')) return
+  if (!confirm('Tem certeza ABSOLUTA? Última confirmação.')) return
+  const { error } = await supabase.rpc('reset_all')
+  if (error) return flash(error.message, true)
+  await loadAll()
+  flash('Tudo apagado. Painel zerado.')
 }
 
 /* ----------------------------- jogadores ------------------------------- */
@@ -111,6 +151,7 @@ onMounted(loadAll)
       <button class="btn btn-sm" :class="{ 'btn-primary': tab === 'eventos' }" @click="tab = 'eventos'">Eventos</button>
       <button class="btn btn-sm" :class="{ 'btn-primary': tab === 'partida' }" @click="tab = 'partida'">Partida avulsa</button>
       <button class="btn btn-sm" :class="{ 'btn-primary': tab === 'jogadores' }" @click="tab = 'jogadores'">Jogadores</button>
+      <button class="btn btn-sm" :class="{ 'btn-primary': tab === 'gestao' }" @click="tab = 'gestao'">Gestão</button>
     </div>
 
     <p v-if="msg" class="banner">{{ msg }}</p>
@@ -224,6 +265,54 @@ onMounted(loadAll)
         </table>
       </div>
     </div>
+
+    <!-- ================= GESTÃO ================= -->
+    <div v-show="tab === 'gestao'" class="grid" style="gap: 16px">
+      <div class="card danger">
+        <h3 style="margin-top: 0">Zona de perigo</h3>
+        <div class="flex wrap between" style="gap: 12px; align-items: center">
+          <div>
+            <strong>Zerar pontuação (nova temporada)</strong>
+            <p class="muted" style="margin: 2px 0 0">Volta todos para 1000 e apaga partidas/eventos. Mantém os jogadores.</p>
+          </div>
+          <button class="btn btn-danger" @click="resetScores">Zerar pontuação</button>
+        </div>
+        <hr style="border-color: var(--border); margin: 14px 0" />
+        <div class="flex wrap between" style="gap: 12px; align-items: center">
+          <div>
+            <strong>Apagar tudo</strong>
+            <p class="muted" style="margin: 2px 0 0">Remove jogadores, partidas e eventos. Só sobram classes e seu login.</p>
+          </div>
+          <button class="btn btn-danger" @click="resetAll">Apagar tudo</button>
+        </div>
+      </div>
+
+      <div class="card" style="padding: 0; overflow: hidden">
+        <h3 style="margin: 20px 20px 0">Partidas recentes <span class="muted">({{ recentMatches.length }})</span></h3>
+        <p class="muted" style="margin: 4px 20px 0">Remover uma partida reverte os pontos e o V/D dos jogadores dela.</p>
+        <table style="margin-top: 12px">
+          <thead>
+            <tr><th>Quando</th><th>Onde</th><th>Time A</th><th style="text-align: center">Placar</th><th>Time B</th><th></th></tr>
+          </thead>
+          <tbody>
+            <tr v-for="m in recentMatches" :key="m.id">
+              <td class="muted" style="white-space: nowrap">{{ fmtDate(m.played_at || m.created_at) }}</td>
+              <td><span class="badge">{{ m.event?.name || 'Avulsa' }}</span></td>
+              <td :class="{ winner: m.winner === 'A' }">{{ roster(m, 'A') }}</td>
+              <td style="text-align: center; white-space: nowrap; font-weight: 700">
+                <template v-if="m.status === 'completed'">{{ m.rounds_a }} × {{ m.rounds_b }}</template>
+                <span v-else class="muted">pendente</span>
+              </td>
+              <td :class="{ winner: m.winner === 'B' }">{{ roster(m, 'B') }}</td>
+              <td style="text-align: right">
+                <button class="btn btn-sm btn-danger" @click="deleteMatch(m)">Remover</button>
+              </td>
+            </tr>
+            <tr v-if="!recentMatches.length"><td colspan="6" class="empty">Nenhuma partida registrada.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -234,4 +323,7 @@ onMounted(loadAll)
 .picker { max-height: 280px; overflow-y: auto; border: 1px solid var(--border); border-radius: 9px; }
 .picker-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border); }
 .picker-row:last-child { border-bottom: none; }
+.danger { border-color: var(--red); }
+.winner { color: var(--accent); font-weight: 700; }
+.between { justify-content: space-between; }
 </style>

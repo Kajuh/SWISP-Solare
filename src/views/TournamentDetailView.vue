@@ -69,12 +69,23 @@ async function toggleParticipant(id) {
   }
 }
 
+const statusLabel = { draft: 'Em montagem', active: 'Em andamento', finished: 'Encerrado' }
+function fmtDate(d) {
+  if (!d) return ''
+  return new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+function teamMp(m, team) { return (m.mp ?? []).filter((x) => x.team === team) }
+
 /* ----------------------------- partidas -------------------------------- */
 async function drawMatch() {
   drawing.value = true
   const { error } = await supabase.rpc('draw_random_match', { p_tournament_id: props.id, p_team_size: 3 })
   drawing.value = false
   if (error) return flash(error.message, true)
+  // primeira partida sorteada: o evento passa a "Em andamento"
+  if (event.value?.status === 'draft') {
+    await supabase.from('tournaments').update({ status: 'active' }).eq('id', props.id)
+  }
   await load()
   flash('Partida sorteada!')
 }
@@ -94,6 +105,13 @@ async function finishEvent() {
   await supabase.from('tournaments').update({ status: 'finished' }).eq('id', props.id)
   await load()
 }
+async function deleteMatch(match) {
+  if (!confirm('Remover esta partida? Os pontos e o V/D dela serão revertidos.')) return
+  const { error } = await supabase.rpc('delete_match', { p_match_id: match.id })
+  if (error) return flash(error.message, true)
+  await load()
+  flash('Partida removida e pontos revertidos.')
+}
 
 onMounted(load)
 watch(() => props.id, load)
@@ -112,7 +130,7 @@ watch(() => props.id, load)
           Vitória +{{ event.win_points }} · Derrota −{{ event.loss_points }} (+{{ event.round_point }} por round vencido)
         </p>
       </div>
-      <span class="badge">{{ event.status }}</span>
+      <span class="badge">{{ statusLabel[event.status] || event.status }}</span>
     </div>
 
     <p v-if="msg" class="banner">{{ msg }}</p>
@@ -175,27 +193,36 @@ watch(() => props.id, load)
     </div>
 
     <!-- ===== Histórico ===== -->
-    <div class="card" style="padding: 0; overflow: hidden">
-      <h3 style="margin: 20px 20px 0">Histórico do evento <span class="muted">({{ history.length }})</span></h3>
+    <div class="card">
+      <h3 style="margin-top: 0">Histórico do evento <span class="muted">({{ history.length }})</span></h3>
       <p v-if="!history.length" class="empty">Nenhuma partida finalizada ainda.</p>
-      <table v-else style="margin-top: 12px">
-        <thead>
-          <tr><th>Time A</th><th style="text-align: center">Placar</th><th>Time B</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="m in history" :key="m.id">
-            <td :class="{ winner: m.winner === 'A' }">
-              {{ roster(m, 'A').map((p) => p.nick).join(', ') }}
-            </td>
-            <td style="text-align: center; font-weight: 700; white-space: nowrap">
-              {{ m.rounds_a }} × {{ m.rounds_b }}
-            </td>
-            <td :class="{ winner: m.winner === 'B' }">
-              {{ roster(m, 'B').map((p) => p.nick).join(', ') }}
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="grid" style="gap: 12px">
+        <div v-for="m in history" :key="m.id" class="hmatch">
+          <div class="hmatch-head">
+            <span class="muted">{{ fmtDate(m.played_at || m.created_at) }}</span>
+            <span class="badge">Finalizada</span>
+            <span style="flex: 1"></span>
+            <button v-if="auth.isAdmin" class="btn btn-sm btn-danger" @click="deleteMatch(m)">Remover</button>
+          </div>
+          <div class="hmatch-body">
+            <div class="hside" :class="{ win: m.winner === 'A' }">
+              <div class="hside-h">Time A {{ m.winner === 'A' ? '🏆' : '' }}</div>
+              <div v-for="mp in teamMp(m, 'A')" :key="mp.player.id" class="prow">
+                <span class="nm">{{ mp.player.nick }}</span>
+                <span :class="mp.delta >= 0 ? 'up' : 'down'">{{ mp.delta >= 0 ? '+' : '' }}{{ mp.delta }}</span>
+              </div>
+            </div>
+            <div class="hscore">{{ m.rounds_a }} <span class="muted">×</span> {{ m.rounds_b }}</div>
+            <div class="hside" :class="{ win: m.winner === 'B' }">
+              <div class="hside-h">Time B {{ m.winner === 'B' ? '🏆' : '' }}</div>
+              <div v-for="mp in teamMp(m, 'B')" :key="mp.player.id" class="prow">
+                <span class="nm">{{ mp.player.nick }}</span>
+                <span :class="mp.delta >= 0 ? 'up' : 'down'">{{ mp.delta >= 0 ? '+' : '' }}{{ mp.delta }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div v-if="auth.isAdmin && event.status !== 'finished'">
@@ -215,4 +242,14 @@ watch(() => props.id, load)
 .team-h { font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 8px; }
 .vs { font-weight: 700; color: var(--text-dim); }
 .winner { color: var(--accent); font-weight: 700; }
+
+.hmatch { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 9px; padding: 12px 14px; }
+.hmatch-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; }
+.hmatch-body { display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px; align-items: start; }
+.hside { display: grid; gap: 4px; }
+.hside-h { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--text-dim); margin-bottom: 4px; }
+.hside.win .hside-h { color: var(--accent); }
+.hside.win .nm { color: var(--accent); font-weight: 700; }
+.prow { display: flex; justify-content: space-between; gap: 12px; }
+.hscore { font-size: 22px; font-weight: 700; white-space: nowrap; padding-top: 18px; }
 </style>
