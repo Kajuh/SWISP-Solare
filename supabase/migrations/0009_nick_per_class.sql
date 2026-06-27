@@ -18,10 +18,10 @@ begin
     join pg_namespace ns on ns.oid = rel.relnamespace
     where ns.nspname = 'public' and rel.relname = 'players' and con.contype = 'u'
       and (
-        select array_agg(att.attname)
+        select array_agg(att.attname::text)
         from unnest(con.conkey) k
         join pg_attribute att on att.attrelid = con.conrelid and att.attnum = k
-      ) = array['nick']
+      ) = array['nick']::text[]
   loop
     execute format('alter table public.players drop constraint %I', c);
   end loop;
