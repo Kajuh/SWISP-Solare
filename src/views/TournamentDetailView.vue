@@ -1,12 +1,13 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import Bo5Entry from '@/components/Bo5Entry.vue'
 
 const props = defineProps({ id: { type: String, required: true } })
 const auth = useAuthStore()
+const router = useRouter()
 
 const event = ref(null)
 const players = ref([])
@@ -105,6 +106,16 @@ async function finishEvent() {
   await supabase.from('tournaments').update({ status: 'finished' }).eq('id', props.id)
   await load()
 }
+async function deleteEvent() {
+  if (!confirm(`Remover "${event.value.name}"? Todas as partidas dele serão apagadas e os pontos revertidos.`)) return
+  // remove cada partida (revertendo os pontos) e depois a sala
+  for (const m of matches.value) {
+    await supabase.rpc('delete_match', { p_match_id: m.id })
+  }
+  const { error } = await supabase.from('tournaments').delete().eq('id', props.id)
+  if (error) return flash(error.message, true)
+  router.push('/eventos')
+}
 async function deleteMatch(match) {
   if (!confirm('Remover esta partida? Os pontos e o V/D dela serão revertidos.')) return
   const { error } = await supabase.rpc('delete_match', { p_match_id: match.id })
@@ -150,46 +161,40 @@ watch(() => props.id, load)
       </div>
     </div>
 
-    <!-- ===== Partida atual ===== -->
-    <div class="card">
-      <h3 style="margin-top: 0">Partida atual</h3>
-
-      <template v-if="current">
-        <div class="grid" style="grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin-bottom: 14px">
-          <div class="team-card a">
-            <div class="team-h">Time A</div>
-            <div v-for="p in roster(current, 'A')" :key="p.id">
-              <RouterLink :to="`/jogador/${p.id}`">{{ p.nick }}</RouterLink>
-              <span class="muted"> · {{ p.game_class }}</span>
-            </div>
-          </div>
-          <div class="vs">VS</div>
-          <div class="team-card b">
-            <div class="team-h">Time B</div>
-            <div v-for="p in roster(current, 'B')" :key="p.id">
-              <RouterLink :to="`/jogador/${p.id}`">{{ p.nick }}</RouterLink>
-              <span class="muted"> · {{ p.game_class }}</span>
-            </div>
+    <!-- ===== Partida em andamento (só aparece quando há uma) ===== -->
+    <div v-if="current" class="card">
+      <h3 style="margin-top: 0">Partida em andamento</h3>
+      <div class="grid" style="grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin-bottom: 14px">
+        <div class="team-card a">
+          <div class="team-h">Time A</div>
+          <div v-for="p in roster(current, 'A')" :key="p.id">
+            <RouterLink :to="`/jogador/${p.id}`">{{ p.nick }}</RouterLink>
+            <span class="muted"> · {{ p.game_class }}</span>
           </div>
         </div>
-
-        <Bo5Entry
-          v-if="auth.isAdmin"
-          :label-a="'Time A'" :label-b="'Time B'" :best-of="current.best_of"
-          @submit="(w) => submitResult(current, w)" @cancel="cancelMatch(current)"
-        />
-        <p v-else class="muted">Aguardando o resultado…</p>
-      </template>
-
-      <template v-else>
-        <p class="empty" v-if="!auth.isAdmin">Nenhuma partida em andamento.</p>
-        <div v-else class="flex" style="gap: 12px; align-items: center">
-          <button class="btn btn-primary" :disabled="participantCount < 6 || drawing || event.status === 'finished'" @click="drawMatch">
-            🎲 {{ drawing ? 'Sorteando…' : 'Gerar partida' }}
-          </button>
-          <span v-if="participantCount < 6" class="muted">Precisa de pelo menos 6 participantes.</span>
+        <div class="vs">VS</div>
+        <div class="team-card b">
+          <div class="team-h">Time B</div>
+          <div v-for="p in roster(current, 'B')" :key="p.id">
+            <RouterLink :to="`/jogador/${p.id}`">{{ p.nick }}</RouterLink>
+            <span class="muted"> · {{ p.game_class }}</span>
+          </div>
         </div>
-      </template>
+      </div>
+      <Bo5Entry
+        v-if="auth.isAdmin"
+        :label-a="'Time A'" :label-b="'Time B'" :best-of="current.best_of"
+        @submit="(w) => submitResult(current, w)" @cancel="cancelMatch(current)"
+      />
+      <p v-else class="muted">Aguardando o resultado…</p>
+    </div>
+
+    <!-- Gerar nova partida (admin, quando não há nenhuma em andamento) -->
+    <div v-else-if="auth.isAdmin && event.status !== 'finished'" class="card flex" style="gap: 12px; align-items: center">
+      <button class="btn btn-primary" :disabled="participantCount < 6 || drawing" @click="drawMatch">
+        🎲 {{ drawing ? 'Sorteando…' : 'Gerar partida' }}
+      </button>
+      <span v-if="participantCount < 6" class="muted">Precisa de pelo menos 6 participantes.</span>
     </div>
 
     <!-- ===== Histórico ===== -->
@@ -225,8 +230,9 @@ watch(() => props.id, load)
       </div>
     </div>
 
-    <div v-if="auth.isAdmin && event.status !== 'finished'">
-      <button class="btn btn-sm" @click="finishEvent">Encerrar evento</button>
+    <div v-if="auth.isAdmin" class="flex" style="gap: 8px">
+      <button v-if="event.status !== 'finished'" class="btn btn-sm" @click="finishEvent">Encerrar</button>
+      <button class="btn btn-sm btn-danger" @click="deleteEvent">Remover</button>
     </div>
   </section>
 </template>

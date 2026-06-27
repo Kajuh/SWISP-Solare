@@ -137,7 +137,19 @@ async function createEvent() {
   if (error) return flash(error.message, true)
   eName.value = ''
   await loadAll()
-  flash('Evento criado. Abra-o para adicionar participantes e sortear partidas.')
+  flash('Sala criada. Abra-a para adicionar participantes e sortear partidas.')
+}
+
+const statusLabel = { draft: 'Em montagem', active: 'Em andamento', finished: 'Encerrada' }
+
+async function removeEvent(t) {
+  if (!confirm(`Remover "${t.name}"? As partidas dela serão apagadas e os pontos revertidos.`)) return
+  const { data: ms } = await supabase.from('matches').select('id').eq('tournament_id', t.id)
+  for (const m of (ms || [])) await supabase.rpc('delete_match', { p_match_id: m.id })
+  const { error } = await supabase.from('tournaments').delete().eq('id', t.id)
+  if (error) return flash(error.message, true)
+  await loadAll()
+  flash('Removida.')
 }
 
 onMounted(loadAll)
