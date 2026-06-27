@@ -5,8 +5,8 @@ const routes = [
   { path: '/', name: 'leaderboard', component: () => import('@/views/LeaderboardView.vue') },
   { path: '/cadastro', name: 'register', component: () => import('@/views/RegisterView.vue') },
   { path: '/jogador/:id', name: 'player', component: () => import('@/views/PlayerView.vue'), props: true },
-  { path: '/eventos', name: 'tournaments', component: () => import('@/views/TournamentsView.vue') },
-  { path: '/eventos/:id', name: 'tournament', component: () => import('@/views/TournamentDetailView.vue'), props: true },
+  { path: '/partidas', name: 'tournaments', component: () => import('@/views/TournamentsView.vue') },
+  { path: '/partidas/:id', name: 'tournament', component: () => import('@/views/TournamentDetailView.vue'), props: true },
   { path: '/login', name: 'login', component: () => import('@/views/LoginView.vue') },
   {
     path: '/admin',

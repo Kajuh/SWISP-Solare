@@ -21,7 +21,7 @@ async function logout() {
       </RouterLink>
       <nav class="nav">
         <RouterLink to="/">Ranking</RouterLink>
-        <RouterLink to="/eventos">Eventos</RouterLink>
+        <RouterLink to="/partidas">Partidas</RouterLink>
         <RouterLink to="/cadastro">Cadastrar</RouterLink>
         <RouterLink v-if="auth.isAdmin" to="/admin">Admin</RouterLink>
         <a v-if="auth.isAdmin" href="#" @click.prevent="logout">Sair</a>

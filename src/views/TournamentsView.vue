@@ -22,13 +22,13 @@ onMounted(load)
 
 <template>
   <section>
-    <h1>Eventos</h1>
-    <p class="muted" style="margin-top: 4px">Sessões de partidas 3v3 aleatórias.</p>
+    <h1>Partidas</h1>
+    <p class="muted" style="margin-top: 4px">Cada partida sorteia confrontos 3v3 aleatórios entre os participantes.</p>
 
     <p v-if="loading" class="empty">Carregando…</p>
-    <p v-else-if="!events.length" class="empty">Nenhum evento criado ainda.</p>
+    <p v-else-if="!events.length" class="empty">Nenhuma partida criada ainda.</p>
     <div v-else class="grid" style="grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); margin-top: 16px">
-      <RouterLink v-for="t in events" :key="t.id" :to="`/eventos/${t.id}`" class="card t-card">
+      <RouterLink v-for="t in events" :key="t.id" :to="`/partidas/${t.id}`" class="card t-card">
         <div class="flex between">
           <h3 style="margin: 0">{{ t.name }}</h3>
           <span class="badge">{{ statusLabel[t.status] || t.status }}</span>

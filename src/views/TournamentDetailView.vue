@@ -83,12 +83,12 @@ async function drawMatch() {
   const { error } = await supabase.rpc('draw_random_match', { p_tournament_id: props.id, p_team_size: 3 })
   drawing.value = false
   if (error) return flash(error.message, true)
-  // primeira partida sorteada: o evento passa a "Em andamento"
+  // primeiro confronto sorteado: a partida passa a "Em andamento"
   if (event.value?.status === 'draft') {
     await supabase.from('tournaments').update({ status: 'active' }).eq('id', props.id)
   }
   await load()
-  flash('Partida sorteada!')
+  flash('Confronto sorteado!')
 }
 async function submitResult(match, winners) {
   const { error } = await supabase.rpc('set_match_result', { p_match_id: match.id, p_round_winners: winners })
@@ -97,7 +97,7 @@ async function submitResult(match, winners) {
   flash('Resultado aplicado e pontuação atualizada.')
 }
 async function cancelMatch(match) {
-  if (!confirm('Descartar esta partida sorteada (sem pontuar)?')) return
+  if (!confirm('Descartar este confronto sorteado (sem pontuar)?')) return
   const { error } = await supabase.from('matches').delete().eq('id', match.id)
   if (error) return flash(error.message, true)
   await load()
@@ -107,17 +107,17 @@ async function finishEvent() {
   await load()
 }
 async function deleteEvent() {
-  if (!confirm(`Remover "${event.value.name}"? Todas as partidas dele serão apagadas e os pontos revertidos.`)) return
-  // remove cada partida (revertendo os pontos) e depois a sala
+  if (!confirm(`Remover "${event.value.name}"? Todos os confrontos dela serão apagados e os pontos revertidos.`)) return
+  // remove cada confronto (revertendo os pontos) e depois a partida
   for (const m of matches.value) {
     await supabase.rpc('delete_match', { p_match_id: m.id })
   }
   const { error } = await supabase.from('tournaments').delete().eq('id', props.id)
   if (error) return flash(error.message, true)
-  router.push('/eventos')
+  router.push('/partidas')
 }
 async function deleteMatch(match) {
-  if (!confirm('Remover esta partida? Os pontos e o V/D dela serão revertidos.')) return
+  if (!confirm('Remover este confronto? Os pontos e o V/D dele serão revertidos.')) return
   const { error } = await supabase.rpc('delete_match', { p_match_id: match.id })
   if (error) return flash(error.message, true)
   await load()
@@ -130,10 +130,10 @@ watch(() => props.id, load)
 
 <template>
   <p v-if="loading" class="empty">Carregando…</p>
-  <p v-else-if="!event" class="empty">Evento não encontrado.</p>
+  <p v-else-if="!event" class="empty">Partida não encontrada.</p>
 
   <section v-else class="grid" style="gap: 20px">
-    <RouterLink to="/eventos" class="muted">← todos os eventos</RouterLink>
+    <RouterLink to="/partidas" class="muted">← todas as partidas</RouterLink>
     <div class="flex between wrap">
       <div>
         <h1 style="margin: 0">{{ event.name }}</h1>
@@ -150,7 +150,7 @@ watch(() => props.id, load)
     <!-- ===== Participantes (admin) ===== -->
     <div v-if="auth.isAdmin && event.status !== 'finished'" class="card">
       <h3 style="margin-top: 0">Participantes <span class="muted">({{ participantCount }})</span></h3>
-      <p class="muted">Marque quem está jogando. As partidas sorteiam 6 deles em 2 times de 3 (sem repetir classe no time).</p>
+      <p class="muted">Marque quem está jogando. Cada confronto sorteia 6 deles em 2 times de 3 (sem repetir classe no time).</p>
       <input v-model="search" placeholder="Buscar jogador…" style="margin-bottom: 10px" />
       <div class="pickers">
         <span
@@ -161,9 +161,9 @@ watch(() => props.id, load)
       </div>
     </div>
 
-    <!-- ===== Partida em andamento (só aparece quando há uma) ===== -->
+    <!-- ===== Confronto em andamento (só aparece quando há um) ===== -->
     <div v-if="current" class="card">
-      <h3 style="margin-top: 0">Partida em andamento</h3>
+      <h3 style="margin-top: 0">Confronto em andamento</h3>
       <div class="grid" style="grid-template-columns: 1fr auto 1fr; gap: 12px; align-items: center; margin-bottom: 14px">
         <div class="team-card a">
           <div class="team-h">Time A</div>
@@ -192,15 +192,15 @@ watch(() => props.id, load)
     <!-- Gerar nova partida (admin, quando não há nenhuma em andamento) -->
     <div v-else-if="auth.isAdmin && event.status !== 'finished'" class="card flex" style="gap: 12px; align-items: center">
       <button class="btn btn-primary" :disabled="participantCount < 6 || drawing" @click="drawMatch">
-        🎲 {{ drawing ? 'Sorteando…' : 'Gerar partida' }}
+        🎲 {{ drawing ? 'Sorteando…' : 'Sortear confronto' }}
       </button>
       <span v-if="participantCount < 6" class="muted">Precisa de pelo menos 6 participantes.</span>
     </div>
 
     <!-- ===== Histórico ===== -->
     <div class="card">
-      <h3 style="margin-top: 0">Histórico do evento <span class="muted">({{ history.length }})</span></h3>
-      <p v-if="!history.length" class="empty">Nenhuma partida finalizada ainda.</p>
+      <h3 style="margin-top: 0">Histórico de confrontos <span class="muted">({{ history.length }})</span></h3>
+      <p v-if="!history.length" class="empty">Nenhum confronto finalizado ainda.</p>
       <div v-else class="grid" style="gap: 12px">
         <div v-for="m in history" :key="m.id" class="hmatch">
           <div class="hmatch-head">
