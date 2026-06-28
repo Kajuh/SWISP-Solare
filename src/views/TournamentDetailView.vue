@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { supabase } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
@@ -41,6 +41,16 @@ async function load() {
   participantIds.value = (pa ?? []).map((x) => x.player_id)
   matches.value = mt ?? []
   loading.value = false
+}
+
+// Recarrega só a lista de jogadores (sem mexer no confronto atual / Bo5 aberto).
+// Usado pelo botão "Atualizar" e pelo realtime (quando alguém se cadastra).
+async function loadPlayers() {
+  const { data } = await supabase
+    .from('players')
+    .select('id, nick, game_class, rating, specialization')
+    .order('nick')
+  players.value = data ?? []
 }
 
 const current = computed(() => matches.value.find((m) => m.status === 'pending') || null)
@@ -125,7 +135,16 @@ async function deleteMatch(match) {
   flash('Partida removida e pontos revertidos.')
 }
 
-onMounted(load)
+let playersChannel = null
+onMounted(() => {
+  load()
+  // Atualiza o rol ao vivo quando um novo personagem é cadastrado
+  playersChannel = supabase
+    .channel('roster-live')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'players' }, loadPlayers)
+    .subscribe()
+})
+onUnmounted(() => playersChannel && supabase.removeChannel(playersChannel))
 watch(() => props.id, load)
 </script>
 
@@ -150,8 +169,11 @@ watch(() => props.id, load)
 
     <!-- ===== Participantes (admin) ===== -->
     <div v-if="auth.isAdmin && event.status !== 'finished'" class="card">
-      <h3 style="margin-top: 0">Participantes <span class="muted">({{ participantCount }})</span></h3>
-      <p class="muted">Marque quem está jogando. Cada confronto sorteia 6 deles em 2 times de 3 (sem repetir classe no time).</p>
+      <div class="flex between" style="align-items: center">
+        <h3 style="margin: 0">Participantes <span class="muted">({{ participantCount }})</span></h3>
+        <button class="btn btn-sm" @click="loadPlayers">↻ Atualizar lista</button>
+      </div>
+      <p class="muted">Marque quem está jogando. Cada confronto sorteia 6 deles em 2 times de 3 (sem repetir classe no time). Novos cadastros aparecem aqui automaticamente.</p>
       <input v-model="search" placeholder="Buscar jogador…" style="margin-bottom: 10px" />
       <div class="pickers">
         <span
