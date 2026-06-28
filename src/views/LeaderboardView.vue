@@ -89,6 +89,9 @@ onUnmounted(() => channel && supabase.removeChannel(channel))
               <span :class="['rank', { top: i < 3 && !classFilter && !search }]">{{ i + 1 }}</span>
             </td>
             <td>
+              <svg v-if="i < 3 && !classFilter && !search" class="crown" :class="`c${i}`" viewBox="0 0 24 22" aria-hidden="true">
+                <path d="M2 6 L7 11 L12 3 L17 11 L22 6 L20 19 L4 19 Z" />
+              </svg>
               <RouterLink :to="`/jogador/${p.id}`" class="nick">{{ p.nick }}</RouterLink>
             </td>
             <td>
@@ -119,4 +122,12 @@ onUnmounted(() => channel && supabase.removeChannel(channel))
 }
 .rank.top { background: var(--accent); color: #1a1405; }
 .spec { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--blue); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
+.crown {
+  width: 16px; height: 15px; margin-right: 6px; vertical-align: -2px;
+  stroke: rgba(0, 0, 0, 0.35); stroke-width: 1;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+}
+.crown.c0 { fill: #f4c84b; } /* ouro */
+.crown.c1 { fill: #cbd2dc; } /* prata */
+.crown.c2 { fill: #cd7f32; } /* bronze */
 </style>
