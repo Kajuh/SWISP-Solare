@@ -51,6 +51,33 @@ onUnmounted(() => channel && supabase.removeChannel(channel))
 
 <template>
   <section>
+    <!-- gradientes metálicos das coroas (definidos uma vez) -->
+    <svg width="0" height="0" style="position: absolute" aria-hidden="true">
+      <defs>
+        <linearGradient id="crown-gold" x1="0" y1="0" x2="0.25" y2="1">
+          <stop offset="0%" stop-color="#fffdf0" />
+          <stop offset="28%" stop-color="#ffe27a" />
+          <stop offset="47%" stop-color="#fff8d2" />
+          <stop offset="58%" stop-color="#ffcf48" />
+          <stop offset="100%" stop-color="#b07d0f" />
+        </linearGradient>
+        <linearGradient id="crown-silver" x1="0" y1="0" x2="0.25" y2="1">
+          <stop offset="0%" stop-color="#ffffff" />
+          <stop offset="28%" stop-color="#e4eaf2" />
+          <stop offset="47%" stop-color="#ffffff" />
+          <stop offset="58%" stop-color="#c3ccd8" />
+          <stop offset="100%" stop-color="#8a939f" />
+        </linearGradient>
+        <linearGradient id="crown-bronze" x1="0" y1="0" x2="0.25" y2="1">
+          <stop offset="0%" stop-color="#ffeed5" />
+          <stop offset="28%" stop-color="#e6974a" />
+          <stop offset="47%" stop-color="#ffdcb4" />
+          <stop offset="58%" stop-color="#cd7f32" />
+          <stop offset="100%" stop-color="#824f1a" />
+        </linearGradient>
+      </defs>
+    </svg>
+
     <div class="flex between wrap" style="margin-bottom: 20px">
       <div>
         <h1>Ranking</h1>
@@ -89,10 +116,10 @@ onUnmounted(() => channel && supabase.removeChannel(channel))
               <span :class="['rank', { top: i < 3 && !classFilter && !search }]">{{ i + 1 }}</span>
             </td>
             <td>
+              <RouterLink :to="`/jogador/${p.id}`" class="nick">{{ p.nick }}</RouterLink>
               <svg v-if="i < 3 && !classFilter && !search" class="crown" :class="`c${i}`" viewBox="0 0 24 22" aria-hidden="true">
                 <path d="M2 6 L7 11 L12 3 L17 11 L22 6 L20 19 L4 19 Z" />
               </svg>
-              <RouterLink :to="`/jogador/${p.id}`" class="nick">{{ p.nick }}</RouterLink>
             </td>
             <td>
               <span class="muted">{{ p.game_class }}</span>
@@ -123,11 +150,11 @@ onUnmounted(() => channel && supabase.removeChannel(channel))
 .rank.top { background: var(--accent); color: #1a1405; }
 .spec { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--blue); border: 1px solid var(--border); border-radius: 5px; padding: 1px 5px; }
 .crown {
-  width: 16px; height: 15px; margin-right: 6px; vertical-align: -2px;
-  stroke: rgba(0, 0, 0, 0.35); stroke-width: 1;
-  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+  width: 16px; height: 15px; margin-left: 6px; vertical-align: -2px;
+  stroke: rgba(0, 0, 0, 0.3); stroke-width: 0.8;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.45)) drop-shadow(0 0 2px rgba(255, 255, 255, 0.55));
 }
-.crown.c0 { fill: #f4c84b; } /* ouro */
-.crown.c1 { fill: #cbd2dc; } /* prata */
-.crown.c2 { fill: #cd7f32; } /* bronze */
+.crown.c0 { fill: url(#crown-gold); }   /* ouro */
+.crown.c1 { fill: url(#crown-silver); } /* prata */
+.crown.c2 { fill: url(#crown-bronze); } /* bronze */
 </style>
